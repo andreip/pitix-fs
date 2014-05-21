@@ -1,0 +1,5 @@
+School assignment to design a PITIX (inspired by minix) file system, including
+a tester too.
+
+You can figure out its structure by looking in the pitix.h (see superblock and
+inode zone, imap, dmap etc.).
