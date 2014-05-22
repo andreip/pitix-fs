@@ -1,0 +1,1 @@
+cmd_/home/andrei/tema4/labs/solutii/lab08-sol/minfs/minfs.ko := ld -r -m elf_i386 -T /home/andrei/linux-3.13/scripts/module-common.lds --build-id  -o /home/andrei/tema4/labs/solutii/lab08-sol/minfs/minfs.ko /home/andrei/tema4/labs/solutii/lab08-sol/minfs/minfs.o /home/andrei/tema4/labs/solutii/lab08-sol/minfs/minfs.mod.o
