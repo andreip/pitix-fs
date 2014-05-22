@@ -1,1 +1,10 @@
 *.sw*
+*.o*
+*.ko*
+.tmp*
+*.symvers
+*.mod*
+
+*.bz*
+*.gz*
+*.zip*
