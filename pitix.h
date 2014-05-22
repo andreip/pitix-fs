@@ -1,9 +1,13 @@
 #ifndef _PITIX_H
 #define _PITIX_H
 
+#define LOG_LEVEL		KERN_ALERT
+
 #define PITIX_MAGIC 		0x58495450 /* ascii little endian for PTIX */
 #define IZONE_BLOCKS		32
 #define PITIX_NAME_LEN 		16
+
+#define PITIX_S_BLOCKSIZE	4096
 
 /*
  * filesystem layout:
