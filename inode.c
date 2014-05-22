@@ -16,33 +16,37 @@ MODULE_DESCRIPTION("Pitix filesystem");
 MODULE_AUTHOR("Andrei Petre");
 MODULE_LICENSE("GPL");
 
-static struct pitix_inode* pitix_find_ino(struct super_block *s,
-					  unsigned long ino,
-					  struct buffer_head **bh1,
-					  struct buffer_head **bh2)
+/* This function searches for an inode (ino)
+ * inside an izone area and also covers the
+ * case when an inode is on two different blocks
+ * and it needs to read twice. This is why
+ * it returns two zones, two buffer heads and
+ * two lengths to read from those zones.
+ *
+ * You may do whatever you please with it :).
+ * Note you need to free those bh's.
+ */
+static void pitix_find_inode(struct super_block *s, unsigned long ino,
+			     struct buffer_head **bh1, struct buffer_head **bh2,
+			     char **zone1, unsigned int *len1,
+			     char **zone2, unsigned int *len2)
 {
 	struct buffer_head *bh;
 	unsigned int block_index, offset;
 	unsigned int bytes_to_read;
 	int remaining_bytes;
-	char *start_addr, *last_addr, *final_mii;
-
-	final_mii = kzalloc(sizeof(struct pitix_inode), GFP_KERNEL);
-	if (!final_mii) {
-		printk(LOG_LEVEL "not enough memory\n");
-		goto out;
-	}
+	char *start_addr1 = NULL, *start_addr2 = NULL, *last_addr;
 
 	block_index = ino * inode_size(s) / s->s_blocksize;
 	bh = sb_bread(s, pitix_sbi(s)->izone_block + block_index);
 	*bh1 = bh;
 	if (bh == NULL) {
 		printk(LOG_LEVEL "could not read block\n");
-		goto out_free_final;
+		goto out_free;
 	}
 
 	offset = (ino * inode_size(s)) % s->s_blocksize;
-	start_addr = ((char*) bh->b_data) + offset;
+	start_addr1 = ((char*) bh->b_data) + offset;
 	last_addr = ((char*) bh->b_data) + s->s_blocksize;
 
 	/* Compute number of bytes we can read from current block. There
@@ -50,9 +54,7 @@ static struct pitix_inode* pitix_find_ino(struct super_block *s,
 	 * than the inode's actual size, meaning we need to read another
 	 * block to actuall read the entire inode from disk.
 	 */
-	bytes_to_read = MIN(abs(last_addr - start_addr + 1), inode_size(s));
-	printk(LOG_LEVEL "memcpy1 %p %p %d\n", final_mii, start_addr, bytes_to_read);
-	memcpy(final_mii, start_addr, bytes_to_read);
+	bytes_to_read = MIN(abs(last_addr - start_addr1 + 1), inode_size(s));
 	remaining_bytes = MAX(0, inode_size(s) - bytes_to_read);
 
 	/* Read the right next block in case we still haven't read
@@ -60,19 +62,57 @@ static struct pitix_inode* pitix_find_ino(struct super_block *s,
 	if (remaining_bytes) {
 		bh = sb_bread(s, pitix_sbi(s)->izone_block + block_index + 1);
 		*bh2 = bh;
+		start_addr2 = bh->b_data;
 	}
 
 	if (bh == NULL) {
 		printk(LOG_LEVEL "could not read 2nd block\n");
-		goto out_free_final;
+		goto out_free;
 	}
-	printk(LOG_LEVEL "memcpy %p %p %d\n", final_mii + bytes_to_read, bh->b_data, remaining_bytes);
-	memcpy(final_mii + bytes_to_read, bh->b_data, remaining_bytes);
+
+	*zone1 = start_addr1;
+	*len1 = bytes_to_read;
+	*zone2 = start_addr2;
+	*len2 = remaining_bytes;
+
+	return;
+
+out_free:
+	if (*bh1)
+		brelse(*bh1);
+	if (*bh2)
+		brelse(*bh2);
+	*bh1 = *bh2 = NULL;
+	*zone1 = *zone2 = NULL;
+}
+
+static struct pitix_inode* pitix_get_inode(struct super_block *s,
+					   unsigned long ino)
+{
+	struct buffer_head *bh1 = NULL, *bh2 = NULL;
+	char *zone1 = NULL, *zone2 = NULL;
+	int len1 = 0, len2 = 0;
+	char *final_mii;
+
+	/* Find the inode specified through two zones and their
+	 * lengths from where memcpy it into another location.
+	 * This way it can be casted to a (struct pitix_inode*).
+	 */
+	pitix_find_inode(s, ino, &bh1, &bh2, &zone1, &len1, &zone2, &len2);
+
+	final_mii = kzalloc(sizeof(struct pitix_inode), GFP_KERNEL);
+	if (!final_mii) {
+		printk(LOG_LEVEL "not enough memory\n");
+		goto out;
+	}
+
+	printk(LOG_LEVEL "memcpy1 %p %p %d\n", final_mii, zone1, len1);
+	memcpy(final_mii, zone1, len1);
+	printk(LOG_LEVEL "memcpy %p %p %d\n", final_mii + len1, zone2, len2);
+	memcpy(final_mii + len1, zone2, len2);
 
 	return (struct pitix_inode*) final_mii;
 
-out_free_final:
-	kfree(final_mii);
 out:
 	return NULL;
 }
@@ -82,7 +122,6 @@ struct inode *pitix_iget(struct super_block *s, unsigned long ino)
 	struct pitix_inode *mi;
 	struct inode *inode;
 	struct pitix_inode_info *mii;
-	struct buffer_head *bh1 = NULL, *bh2 = NULL;
 
 	/* assert that the ino number is correct. */
 	if (ino > get_inodes(s)) {
@@ -102,7 +141,7 @@ struct inode *pitix_iget(struct super_block *s, unsigned long ino)
 	/* See whether reading once is enough, sometimes
 	 * we need to read two blocks.
 	 */
-	mi = pitix_find_ino(s, ino, &bh1, &bh2);
+	mi = pitix_get_inode(s, ino);
 	if (mi == NULL) {
 		printk(LOG_LEVEL "error finding the inode\n");
 		goto out_bad_sb;
@@ -134,10 +173,6 @@ struct inode *pitix_iget(struct super_block *s, unsigned long ino)
 
 	/* free resources */
 	kfree(mi);
-	if (bh1)
-		brelse(bh1);
-	if (bh2)
-		brelse(bh2);
 	unlock_new_inode(inode);
 
 	printk(LOG_LEVEL "got inode %lu\n", ino);
@@ -145,11 +180,8 @@ struct inode *pitix_iget(struct super_block *s, unsigned long ino)
 	return inode;
 
 out_bad_sb:
+	kfree(mi);
 	iget_failed(inode);
-	if (bh1)
-		brelse(bh1);
-	if (bh2)
-		brelse(bh2);
 out:
 	return NULL;
 }
