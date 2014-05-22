@@ -21,44 +21,60 @@ static struct pitix_inode* pitix_find_ino(struct super_block *s,
 					  struct buffer_head **bh1,
 					  struct buffer_head **bh2)
 {
+	struct buffer_head *bh;
 	unsigned int block_index, offset;
-	unsigned int bytes_left_in_block;
-	char *start_addr, *last_addr, *final_mii = NULL;
+	unsigned int bytes_to_read;
+	int remaining_bytes;
+	char *start_addr, *last_addr, *final_mii;
+
+	final_mii = kzalloc(sizeof(struct pitix_inode), GFP_KERNEL);
+	if (!final_mii) {
+		printk(LOG_LEVEL "not enough memory\n");
+		goto out;
+	}
 
 	block_index = ino * inode_size(s) / s->s_blocksize;
-	*bh1 = sb_bread(s, pitix_sbi(s)->izone_block + block_index);
-	if (*bh1 == NULL) {
+	bh = sb_bread(s, pitix_sbi(s)->izone_block + block_index);
+	*bh1 = bh;
+	if (bh == NULL) {
 		printk(LOG_LEVEL "could not read block\n");
-		return NULL;
+		goto out_free_final;
 	}
 
 	offset = (ino * inode_size(s)) % s->s_blocksize;
-	start_addr = ((char*)(*bh1)->b_data) + offset;
-	last_addr = ((char*)(*bh1)->b_data) + s->s_blocksize;
+	start_addr = ((char*) bh->b_data) + offset;
+	last_addr = ((char*) bh->b_data) + s->s_blocksize;
 
-	/* Check if we don't have all the structure in here, if we need
-	 * to read more.
+	/* Compute number of bytes we can read from current block. There
+	 * is the possiblity that the size left in the block is smaller
+	 * than the inode's actual size, meaning we need to read another
+	 * block to actuall read the entire inode from disk.
 	 */
-	bytes_left_in_block = abs(last_addr - start_addr + 1);
-	if (bytes_left_in_block < inode_size(s)) {
-		memcpy(final_mii, start_addr, MIN(inode_size(s), bytes_left_in_block));
+	bytes_to_read = MIN(abs(last_addr - start_addr + 1), inode_size(s));
+	printk(LOG_LEVEL "memcpy1 %p %p %d\n", final_mii, start_addr, bytes_to_read);
+	memcpy(final_mii, start_addr, bytes_to_read);
+	remaining_bytes = MAX(0, inode_size(s) - bytes_to_read);
 
-		*bh2 = sb_bread(s, pitix_sbi(s)->izone_block + block_index + 1);
-		if (*bh2 == NULL) {
-			printk(LOG_LEVEL "could not read 2nd block\n");
-			return NULL;
-		}
-
-		offset = inode_size(s) - bytes_left_in_block;
-
-		/* Copy the remaining part from 2nd block. */
-		memcpy(final_mii + bytes_left_in_block,
-		       ((char*)(*bh2)->b_data), offset);
-	} else {
-		final_mii = start_addr;
+	/* Read the right next block in case we still haven't read
+	 * inode_size(s). */
+	if (remaining_bytes) {
+		bh = sb_bread(s, pitix_sbi(s)->izone_block + block_index + 1);
+		*bh2 = bh;
 	}
 
+	if (bh == NULL) {
+		printk(LOG_LEVEL "could not read 2nd block\n");
+		goto out_free_final;
+	}
+	printk(LOG_LEVEL "memcpy %p %p %d\n", final_mii + bytes_to_read, bh->b_data, remaining_bytes);
+	memcpy(final_mii + bytes_to_read, bh->b_data, remaining_bytes);
+
 	return (struct pitix_inode*) final_mii;
+
+out_free_final:
+	kfree(final_mii);
+out:
+	return NULL;
 }
 
 struct inode *pitix_iget(struct super_block *s, unsigned long ino)
