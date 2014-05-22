@@ -133,6 +133,7 @@ struct inode *pitix_iget(struct super_block *s, unsigned long ino)
 
 
 	/* free resources */
+	kfree(mi);
 	if (bh1)
 		brelse(bh1);
 	if (bh2)
