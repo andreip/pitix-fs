@@ -66,6 +66,7 @@ struct pitix_sb_info {
 	__u8 dzone_block;
 	__u16 bfree;
 	__u16 ffree;
+	struct buffer_head *sb_bh;
 };
 
 #ifdef __KERNEL__

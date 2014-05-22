@@ -222,38 +222,24 @@ static void pitix_sb_destroy_inode(struct inode *inode)
 	kfree(mii);
 }
 
+static void pitix_put_super(struct super_block *sb)
+{
+	struct pitix_sb_info *sbi = sb->s_fs_info;
+
+	/* free superblock buffer head */
+	mark_buffer_dirty(sbi->sb_bh);
+	brelse(sbi->sb_bh);
+
+	printk(LOG_LEVEL "released superblock resources\n");
+}
+
 static const struct super_operations pitix_ops = {
 	.statfs         = simple_statfs,
 	.alloc_inode    = pitix_sb_alloc_inode,
 	.destroy_inode  = pitix_sb_destroy_inode,
+	//.write_inode	= pitix_write_inode,
+	.put_super	= pitix_put_super,
 };
-
-struct inode *myfs_get_inode(struct super_block *sb, int mode)
-{
-	struct inode *inode = new_inode(sb);
-
-	if (!inode)
-		return NULL;
-
-	/* TODO 3: fill inode structure
-	 *     - mode, uid, gid (or use inode_init_owner)
-	 *     - atime,ctime,mtime
-	 */
-	inode_init_owner(inode, NULL, mode);
-	inode->i_atime = inode->i_mtime = inode->i_ctime = CURRENT_TIME;
-
-	/*
-	 * TODO 3: inode operations for root inode (use S_ISDIR macro)
-	 *     directory link count should be incremented (use inc_nlink)
-	 */
-	if (S_ISDIR(mode)) {
-		inode->i_op = &simple_dir_inode_operations;
-		inode->i_fop = &simple_dir_operations;
-		inc_nlink(inode);
-	}
-
-	return inode;
-}
 
 int pitix_fill_super(struct super_block *sb, void *data, int silent)
 {
@@ -315,7 +301,8 @@ int pitix_fill_super(struct super_block *sb, void *data, int silent)
 		goto out_iput;
 	sb->s_root = root_dentry;
 
-	brelse(bh);
+	/* store superblock buffer_head for further use */
+	sbi->sb_bh = bh;
 
 	return 0;
 
