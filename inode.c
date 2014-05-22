@@ -19,22 +19,37 @@ MODULE_LICENSE("GPL");
 static struct inode *pitix_sb_alloc_inode(struct super_block *s)
 {
 	struct pitix_inode_info *mii;
+	int ino_blocks;
 
 	/* allocate pitix_inode_info and init inode */
 	mii = (struct pitix_inode_info *)
 		kzalloc(sizeof(struct pitix_inode_info), GFP_KERNEL);
 	if (!mii)
-		return NULL;
+		goto out;
+
+	/* allocate memory for data blocks too. */
+	ino_blocks = pitix_sbi(s)->inode_data_blocks;
+	mii->data_blocks = kzalloc(ino_blocks * sizeof(__u16), GFP_KERNEL);
+	if (!mii->data_blocks)
+		goto out_free;
 
 	inode_init_once(&mii->vfs_inode);
 
 	return &mii->vfs_inode;
+
+out_free:
+	kfree(mii);
+out:
+	return NULL;
 }
 
 static void pitix_sb_destroy_inode(struct inode *inode)
 {
 	/* free pitix_inode_info */
-	kfree(container_of(inode, struct pitix_inode_info, vfs_inode));
+	struct pitix_inode_info *mii = container_of(inode,
+		struct pitix_inode_info, vfs_inode);
+	kfree(mii->data_blocks);
+	kfree(mii);
 }
 
 static const struct super_operations pitix_ops = {
@@ -110,6 +125,8 @@ int pitix_fill_super(struct super_block *sb, void *data, int silent)
 	sbi->dzone_block = psb->dzone_block;
 	sbi->bfree = psb->bfree;
 	sbi->ffree = psb->ffree;
+	/* set the right block size on superblock (now that we know it ). */
+	sb_set_blocksize(sb, 1 << psb->block_size_bits);
 
 	/* fill super_block with magic_number, super_operations */
 	sb->s_magic = PITIX_MAGIC;
