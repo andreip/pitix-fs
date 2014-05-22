@@ -16,6 +16,127 @@ MODULE_DESCRIPTION("Pitix filesystem");
 MODULE_AUTHOR("Andrei Petre");
 MODULE_LICENSE("GPL");
 
+static struct pitix_inode* pitix_find_ino(struct super_block *s,
+					  unsigned long ino,
+					  struct buffer_head **bh1,
+					  struct buffer_head **bh2)
+{
+	unsigned int block_index, offset;
+	unsigned int bytes_left_in_block;
+	char *start_addr, *last_addr, *final_mii = NULL;
+
+	block_index = ino * inode_size(s) / s->s_blocksize;
+	*bh1 = sb_bread(s, pitix_sbi(s)->izone_block + block_index);
+	if (*bh1 == NULL) {
+		printk(LOG_LEVEL "could not read block\n");
+		return NULL;
+	}
+
+	offset = (ino * inode_size(s)) % s->s_blocksize;
+	start_addr = ((char*)(*bh1)->b_data) + offset;
+	last_addr = ((char*)(*bh1)->b_data) + s->s_blocksize;
+
+	/* Check if we don't have all the structure in here, if we need
+	 * to read more.
+	 */
+	bytes_left_in_block = abs(last_addr - start_addr + 1);
+	if (bytes_left_in_block < inode_size(s)) {
+		memcpy(final_mii, start_addr, MIN(inode_size(s), bytes_left_in_block));
+
+		*bh2 = sb_bread(s, pitix_sbi(s)->izone_block + block_index + 1);
+		if (*bh2 == NULL) {
+			printk(LOG_LEVEL "could not read 2nd block\n");
+			return NULL;
+		}
+
+		offset = inode_size(s) - bytes_left_in_block;
+
+		/* Copy the remaining part from 2nd block. */
+		memcpy(final_mii + bytes_left_in_block,
+		       ((char*)(*bh2)->b_data), offset);
+	} else {
+		final_mii = start_addr;
+	}
+
+	return (struct pitix_inode*) final_mii;
+}
+
+struct inode *pitix_iget(struct super_block *s, unsigned long ino)
+{
+	struct pitix_inode *mi;
+	struct inode *inode;
+	struct pitix_inode_info *mii;
+	struct buffer_head *bh1 = NULL, *bh2 = NULL;
+
+	/* assert that the ino number is correct. */
+	if (ino > get_inodes(s)) {
+		printk(LOG_LEVEL "error bad inode index\n");
+		goto out;
+	}
+
+	/* allocate VFS inode */
+	inode = iget_locked(s, ino);
+	if (inode == NULL) {
+		printk(LOG_LEVEL "error aquiring inode\n");
+		return ERR_PTR(-ENOMEM);
+	}
+	if (!(inode->i_state & I_NEW))
+		return inode;
+
+	/* See whether reading once is enough, sometimes
+	 * we need to read two blocks.
+	 */
+	mi = pitix_find_ino(s, ino, &bh1, &bh2);
+	if (mi == NULL) {
+		printk(LOG_LEVEL "error finding the inode\n");
+		goto out_bad_sb;
+	}
+
+	/* fill VFS inode */
+	inode->i_mode = mi->mode;
+	inode->i_uid = mi->uid;
+	inode->i_gid = mi->gid;
+	inode->i_size = mi->size;
+	inode->i_blocks = 0;
+	inode->i_mtime = inode->i_atime = inode->i_ctime = CURRENT_TIME;
+
+	if (S_ISDIR(inode->i_mode)) {
+		inode->i_op = &simple_dir_inode_operations;
+		inode->i_fop = &simple_dir_operations;
+
+		/* directory inodes start off with i_nlink == 2 */
+		inc_nlink(inode);
+	}
+
+	/* fill data for mii */
+	mii = container_of(inode, struct pitix_inode_info, vfs_inode);
+	memcpy(mii->data_blocks, mi->data_blocks,
+	       pitix_sbi(s)->inode_data_blocks * sizeof(__u16));
+
+	printk(LOG_LEVEL "found inode %lu %d\n", mii->vfs_inode.i_ino, mi->size);
+
+
+	/* free resources */
+	if (bh1)
+		brelse(bh1);
+	if (bh2)
+		brelse(bh2);
+	unlock_new_inode(inode);
+
+	printk(LOG_LEVEL "got inode %lu\n", ino);
+
+	return inode;
+
+out_bad_sb:
+	iget_failed(inode);
+	if (bh1)
+		brelse(bh1);
+	if (bh2)
+		brelse(bh2);
+out:
+	return NULL;
+}
+
 static struct inode *pitix_sb_alloc_inode(struct super_block *s)
 {
 	struct pitix_inode_info *mii;
@@ -134,9 +255,9 @@ int pitix_fill_super(struct super_block *sb, void *data, int silent)
 
 	/* allocate root inode and root dentry */
 	/* use myfs_get_inode instead of pitix_iget */
-	//root_inode = pitix_iget(sb, 0);
-	root_inode = myfs_get_inode(sb, S_IFDIR | S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
-	root_inode->i_ino = 1;
+	root_inode = pitix_iget(sb, 0);
+	//root_inode = myfs_get_inode(sb, S_IFDIR | S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+	//root_inode->i_ino = 1;
 	if (!root_inode)
 		goto out_bad_inode;
 

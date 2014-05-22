@@ -9,6 +9,9 @@
 
 #define PITIX_S_BLOCKSIZE	4096
 
+#define MIN(a,b)		((a) < (b) ? (a) : (b))
+#define MAX(a,b)		((a) > (b) ? (a) : (b))
+
 /*
  * filesystem layout:
  *
@@ -66,6 +69,11 @@ struct pitix_sb_info {
 };
 
 #ifdef __KERNEL__
+static inline struct pitix_sb_info* pitix_sbi(struct super_block* sb)
+{
+	return sb->s_fs_info;
+}
+
 static inline int inode_size(struct super_block *sb)
 {
 	struct pitix_super_block *psb=(struct pitix_super_block*)sb->s_fs_info;
