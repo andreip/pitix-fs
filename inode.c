@@ -18,6 +18,13 @@ MODULE_LICENSE("GPL");
 
 struct pitix_sb_info {
 	__u8 version;
+	__u8 inode_data_blocks;
+	__u8 imap_block;
+	__u8 dmap_block;
+	__u8 izone_block;
+	__u8 dzone_block;
+	__u16 bfree;
+	__u16 ffree;
 };
 
 struct pitix_inode_info {
@@ -25,11 +32,11 @@ struct pitix_inode_info {
 	struct inode vfs_inode;
 };
 
-static struct inode *pitix_alloc_inode(struct super_block *s)
+static struct inode *_pitix_alloc_inode(struct super_block *s)
 {
 	struct pitix_inode_info *mii;
 
-	/* TODO 3: allocate pitix_inode_info and init inode */
+	/* allocate pitix_inode_info and init inode */
 	mii = (struct pitix_inode_info *)
 		kzalloc(sizeof(struct pitix_inode_info), GFP_KERNEL);
 	if (!mii)
@@ -40,17 +47,16 @@ static struct inode *pitix_alloc_inode(struct super_block *s)
 	return &mii->vfs_inode;
 }
 
-static void pitix_destroy_inode(struct inode *inode)
+static void _pitix_destroy_inode(struct inode *inode)
 {
-	/* TODO 3: free pitix_inode_info */
+	/* free pitix_inode_info */
 	kfree(container_of(inode, struct pitix_inode_info, vfs_inode));
 }
 
 static const struct super_operations pitix_ops = {
 	.statfs         = simple_statfs,
-	/* TODO 4: add alloc and destroy inode functions */
-	.alloc_inode    = pitix_alloc_inode,
-	.destroy_inode  = pitix_destroy_inode,
+	.alloc_inode    = _pitix_alloc_inode,
+	.destroy_inode  = _pitix_destroy_inode,
 };
 
 struct inode *myfs_get_inode(struct super_block *sb, int mode)
@@ -80,10 +86,10 @@ struct inode *myfs_get_inode(struct super_block *sb, int mode)
 	return inode;
 }
 
-static int pitix_fill_super(struct super_block *s, void *data, int silent)
+int pitix_fill_super(struct super_block *sb, void *data, int silent)
 {
 	struct pitix_sb_info *sbi;
-	struct pitix_super_block *ms;
+	struct pitix_super_block *psb;
 	struct inode *root_inode;
 	struct dentry *root_dentry;
 	struct buffer_head *bh;
@@ -94,34 +100,41 @@ static int pitix_fill_super(struct super_block *s, void *data, int silent)
 	sbi = kzalloc(sizeof(struct pitix_sb_info), GFP_KERNEL);
 	if (!sbi)
 		return -ENOMEM;
-	s->s_fs_info = sbi;
+	sb->s_fs_info = sbi;
 
 	/* set block size for superblock */
-	if (!sb_set_blocksize(s, PITIX_S_BLOCKSIZE))
+	if (!sb_set_blocksize(sb, PITIX_S_BLOCKSIZE))
 		goto out_bad_blocksize;
 
-	/* TODO 2: read block with superblock (1st block, index 0) */
-	if (!(bh = sb_bread(s, 0)))
+	/* read block with superblock (1st block, index 0) */
+	if (!(bh = sb_bread(sb, 0)))
 		goto out_bad_sb;
 
-	/* TODO 2: interpret read data as pitix_super_block */
-	ms = (struct pitix_super_block *) bh->b_data;
+	/* interpret read data as pitix_super_block */
+	psb = (struct pitix_super_block *) bh->b_data;
 
-	/* TODO 2: check magic number; jump to out_bad_magic if not suitable */
-	if (ms->magic != PITIX_MAGIC)
+	/* check magic number; jump to out_bad_magic if not suitable */
+	if (psb->magic != PITIX_MAGIC)
 		goto out_bad_magic;
 
-	/* TODO 2: fill sbi with information from disk superblock */
-	sbi->version = ms->version;
+	/* fill sbi with information from disk superblock */
+	sbi->version = psb->version;
+	sbi->inode_data_blocks = psb->inode_data_blocks;
+	sbi->imap_block = psb->imap_block;
+	sbi->dmap_block = psb->dmap_block;
+	sbi->izone_block = psb->izone_block;
+	sbi->dzone_block = psb->dzone_block;
+	sbi->bfree = psb->bfree;
+	sbi->ffree = psb->ffree;
 
-	/* TODO 2: fill super_block with magic_number, super_operations */
-	s->s_magic = PITIX_MAGIC;
-	s->s_op = &pitix_ops;
+	/* fill super_block with magic_number, super_operations */
+	sb->s_magic = PITIX_MAGIC;
+	sb->s_op = &pitix_ops;
 
 	/* allocate root inode and root dentry */
-	/* TODO 2: use myfs_get_inode instead of pitix_iget */
-	//root_inode = pitix_iget(s, 0);
-	root_inode = myfs_get_inode(s, S_IFDIR | S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+	/* use myfs_get_inode instead of pitix_iget */
+	//root_inode = pitix_iget(sb, 0);
+	root_inode = myfs_get_inode(sb, S_IFDIR | S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 	root_inode->i_ino = 1;
 	if (!root_inode)
 		goto out_bad_inode;
@@ -129,7 +142,7 @@ static int pitix_fill_super(struct super_block *s, void *data, int silent)
 	root_dentry = d_make_root(root_inode);
 	if (!root_dentry)
 		goto out_iput;
-	s->s_root = root_dentry;
+	sb->s_root = root_dentry;
 
 	brelse(bh);
 
@@ -146,7 +159,7 @@ out_bad_sb:
 	printk(LOG_LEVEL "error reading buffer_head\n");
 out_bad_blocksize:
 	printk(LOG_LEVEL "bad block size\n");
-	s->s_fs_info = NULL;
+	sb->s_fs_info = NULL;
 	kfree(sbi);
 	return ret;
 }
