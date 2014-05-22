@@ -16,23 +16,7 @@ MODULE_DESCRIPTION("Pitix filesystem");
 MODULE_AUTHOR("Andrei Petre");
 MODULE_LICENSE("GPL");
 
-struct pitix_sb_info {
-	__u8 version;
-	__u8 inode_data_blocks;
-	__u8 imap_block;
-	__u8 dmap_block;
-	__u8 izone_block;
-	__u8 dzone_block;
-	__u16 bfree;
-	__u16 ffree;
-};
-
-struct pitix_inode_info {
-	__u16 data_block;
-	struct inode vfs_inode;
-};
-
-static struct inode *_pitix_alloc_inode(struct super_block *s)
+static struct inode *pitix_sb_alloc_inode(struct super_block *s)
 {
 	struct pitix_inode_info *mii;
 
@@ -47,7 +31,7 @@ static struct inode *_pitix_alloc_inode(struct super_block *s)
 	return &mii->vfs_inode;
 }
 
-static void _pitix_destroy_inode(struct inode *inode)
+static void pitix_sb_destroy_inode(struct inode *inode)
 {
 	/* free pitix_inode_info */
 	kfree(container_of(inode, struct pitix_inode_info, vfs_inode));
@@ -55,8 +39,8 @@ static void _pitix_destroy_inode(struct inode *inode)
 
 static const struct super_operations pitix_ops = {
 	.statfs         = simple_statfs,
-	.alloc_inode    = _pitix_alloc_inode,
-	.destroy_inode  = _pitix_destroy_inode,
+	.alloc_inode    = pitix_sb_alloc_inode,
+	.destroy_inode  = pitix_sb_destroy_inode,
 };
 
 struct inode *myfs_get_inode(struct super_block *sb, int mode)

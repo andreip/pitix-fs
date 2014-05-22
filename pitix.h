@@ -28,7 +28,7 @@ struct pitix_super_block {
 	__u8 izone_block;
 	__u8 dzone_block;
 	__u16 bfree;
-	__u16 ffree; 
+	__u16 ffree;
 #ifdef __KERNEL__
 	struct buffer_head *sb_bh, *dmap_bh, *imap_bh;
 	__u8 *dmap, *imap;
@@ -47,6 +47,22 @@ struct pitix_inode {
 	__u32 size;
 	__u32 time;
 	__u16 data_blocks[0];
+};
+
+struct pitix_inode_info {
+	__u16 *data_blocks;
+	struct inode vfs_inode;
+};
+
+struct pitix_sb_info {
+	__u8 version;
+	__u8 inode_data_blocks;
+	__u8 imap_block;
+	__u8 dmap_block;
+	__u8 izone_block;
+	__u8 dzone_block;
+	__u16 bfree;
+	__u16 ffree;
 };
 
 #ifdef __KERNEL__
