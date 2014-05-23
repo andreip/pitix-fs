@@ -19,20 +19,8 @@ static struct pitix_dir_entry *pitix_find_entry(struct dentry *dentry,
 	struct pitix_dir_entry *de;
 	size_t i;
 
-	for (i = 0; i < pitix_sbi(sb)->inode_data_blocks; ++i)
-		printk(LOG_LEVEL "(%d %d) ", i, mii->data_blocks[0]);
-	printk(LOG_LEVEL "\n");
-
 	/* read parent folder data block (contains dentries) */
 	bh = sb_bread(sb, pitix_sbi(sb)->dzone_block + mii->data_blocks[0]);
-	//if (mii->data_blocks[0]) {
-	//	printk(LOG_LEVEL "find entry have dir with data_block at %d\n", mii->data_blocks[0]);
-	//	bh = sb_bread(sb, pitix_sbi(sb)->dzone_block + mii->data_blocks[0]);
-	//} else {
-	//	printk(LOG_LEVEL "find entry have empty dir\n");
-	//	return NULL;
-	//}
-
 	if (bh == NULL) {
 		printk(LOG_LEVEL "could not read block\n");
 		return NULL;
