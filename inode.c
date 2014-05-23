@@ -103,7 +103,7 @@ static struct pitix_inode* pitix_get_inode(struct super_block *s,
 	final_mii = kzalloc(inode_size(s), GFP_KERNEL);
 	if (!final_mii) {
 		printk(LOG_LEVEL "not enough memory\n");
-		goto out;
+		return NULL;
 	}
 
 	printk(LOG_LEVEL "memcpy1 %p %p %d\n", final_mii, zone1, len1);
@@ -112,9 +112,6 @@ static struct pitix_inode* pitix_get_inode(struct super_block *s,
 	memcpy(final_mii + len1, zone2, len2);
 
 	return (struct pitix_inode*) final_mii;
-
-out:
-	return NULL;
 }
 
 struct inode *pitix_iget(struct super_block *s, unsigned long ino)
