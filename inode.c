@@ -36,10 +36,11 @@ static void pitix_find_inode(struct super_block *s, unsigned long ino,
 	unsigned int bytes_to_read;
 	int remaining_bytes;
 	char *start_addr1 = NULL, *start_addr2 = NULL, *last_addr;
-	struct pitix_inode *test;
+	//struct pitix_inode *test;
 
 	block_index = ino * inode_size(s) / s->s_blocksize;
-	printk(LOG_LEVEL "find_inode %lu block_index %d %d\n", ino, block_index, pitix_sbi(s)->izone_block);
+	printk(LOG_LEVEL "MA-TAA ino %lu ino_size %d block %d\n", ino, inode_size(s), block_index);
+	//printk(LOG_LEVEL "find_inode %lu block_index %d %d\n", ino, block_index, pitix_sbi(s)->izone_block);
 	bh = sb_bread(s, pitix_sbi(s)->izone_block + block_index);
 	*bh1 = bh;
 	if (bh == NULL) {
@@ -47,14 +48,11 @@ static void pitix_find_inode(struct super_block *s, unsigned long ino,
 		goto out_free;
 	}
 
-	test = (struct pitix_inode*) (((char*) bh->b_data) + inode_size(s));
-	printk(LOG_LEVEL "test %d %d\n", test->data_blocks[0], test->data_blocks[1]);
-	printk(LOG_LEVEL "test mode %05o uid %d gid %d size %d time %d\n", test->mode, test->uid, test->gid, test->size, test->time);
-
+	//test = (struct pitix_inode*) (((char*) bh->b_data) + inode_size(s));
 	offset = (ino * inode_size(s)) % s->s_blocksize;
 	start_addr1 = ((char*) bh->b_data) + offset;
 	last_addr = ((char*) bh->b_data) + s->s_blocksize;
-	printk(LOG_LEVEL "find_inode off %u st %p lst %p\n", offset, start_addr1, last_addr);
+	//printk(LOG_LEVEL "find_inode off %u st %p lst %p\n", offset, start_addr1, last_addr);
 
 	/* Compute number of bytes we can read from current block. There
 	 * is the possiblity that the size left in the block is smaller
@@ -64,7 +62,7 @@ static void pitix_find_inode(struct super_block *s, unsigned long ino,
 	bytes_to_read = MIN(abs(last_addr - start_addr1 + 1), inode_size(s));
 	remaining_bytes = MAX(0, inode_size(s) - bytes_to_read);
 
-	printk(LOG_LEVEL "reached here0, bh %p\n", bh);
+	//printk(LOG_LEVEL "reached here0, bh %p\n", bh);
 
 	/* Read the right next block in case we still haven't read
 	 * inode_size(s). */
@@ -84,7 +82,7 @@ static void pitix_find_inode(struct super_block *s, unsigned long ino,
 	*zone2 = start_addr2;
 	*len2 = remaining_bytes;
 
-	printk(LOG_LEVEL "reached here1 bh1 %p bh2 %p z1 z2 %p %p l1 l2 %u %u\n", *bh1, *bh2, *zone1, *zone2, *len1, *len2);
+	//printk(LOG_LEVEL "reached here1 bh1 %p bh2 %p z1 z2 %p %p l1 l2 %u %u\n", *bh1, *bh2, *zone1, *zone2, *len1, *len2);
 
 
 	return;
@@ -158,6 +156,10 @@ struct inode *pitix_iget(struct super_block *s, unsigned long ino)
 		goto out_bad_sb;
 	}
 
+	printk(LOG_LEVEL "MA-TAA **inode %d %d\n", mi->data_blocks[0], mi->data_blocks[1]);
+	printk(LOG_LEVEL "MA-TAA **inode mode %05o uid %d gid %d size %d time %d\n", mi->mode, mi->uid, mi->gid, mi->size, mi->time);
+
+
 	/* fill VFS inode */
 	inode->i_mode = mi->mode;
 	inode->i_uid = mi->uid;
@@ -172,12 +174,12 @@ struct inode *pitix_iget(struct super_block *s, unsigned long ino)
 	}
 
 	/* fill data for mii */
-	printk(LOG_LEVEL "----\n");
+	//printk(LOG_LEVEL "----\n");
 	mii = container_of(inode, struct pitix_inode_info, vfs_inode);
-	for (i = 0 ; i < pitix_sbi(s)->inode_data_blocks; ++i) {
-		printk(LOG_LEVEL "iget %d %d\n", i, mii->data_blocks[i]);
-	}
-	printk(LOG_LEVEL "----\n");
+	//for (i = 0 ; i < pitix_sbi(s)->inode_data_blocks; ++i) {
+	//	printk(LOG_LEVEL "iget %d %d\n", i, mii->data_blocks[i]);
+	//}
+	//printk(LOG_LEVEL "----\n");
 	memcpy(mii->data_blocks, mi->data_blocks,
 	       pitix_sbi(s)->inode_data_blocks * sizeof(__u16));
 
@@ -263,6 +265,7 @@ int pitix_write_inode(struct inode *inode, struct
 	mi.uid = inode->i_uid;
 	mi.gid = inode->i_gid;
 	mi.size = inode->i_size;
+
 	printk(LOG_LEVEL "nr inodes %d\n", pitix_sbi(sb)->inode_data_blocks);
 	for (i = 0; i < pitix_sbi(sb)->inode_data_blocks; ++i)
 		printk(LOG_LEVEL "nr inode (%d) %d\n", i, mii->data_blocks[i]);
@@ -363,10 +366,7 @@ int pitix_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_op = &pitix_ops;
 
 	/* allocate root inode and root dentry */
-	/* use myfs_get_inode instead of pitix_iget */
 	root_inode = pitix_iget(sb, 0);
-	//root_inode = myfs_get_inode(sb, S_IFDIR | S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
-	//root_inode->i_ino = 1;
 	if (!root_inode)
 		goto out_bad_inode;
 
