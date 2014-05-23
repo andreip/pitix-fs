@@ -155,9 +155,6 @@ struct inode *pitix_iget(struct super_block *s, unsigned long ino)
 	if (S_ISDIR(inode->i_mode)) {
 		inode->i_op = &simple_dir_inode_operations;
 		inode->i_fop = &simple_dir_operations;
-
-		/* directory inodes start off with i_nlink == 2 */
-		inc_nlink(inode);
 	}
 
 	/* fill data for mii */
