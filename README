@@ -1,5 +1,16 @@
-School assignment to design a PITIX (inspired by minix) file system, including
-a tester too.
+# Petre Andrei, 342 C3
 
-You can figure out its structure by looking in the pitix.h (see superblock and
-inode zone, imap, dmap etc.).
+Nu am reusit sa fac read-ul bine fiindca am intampinat probleme pe care m-am
+tot chinuit in zadar sa le rezolv, sa gasesc offset-ul de unde sa
+citesc corect. Deci am un bug la citire care nu face pitix_iget
+cum trebuie pentru altceva decat /.
+
+Eu cred ca codul e relativ corect, dar orele lungi de debug m-au
+cam descurajat, probabil am inteles eu prost ceva. Am tratat si cazul
+cand un inode e intre doua block-uri, dar nici macar pe cazul simplu
+altul decat root(/) nu functioneaza.
+
+L.E: In cele din urma am gasit bug-ul, inode_size folosea struct pitix_super_block
+in loc de struct pitix_sb_info ulterior definita de mine, si se strica absolut
+orice impartire :(. Greseala mea poate ca am definit acel sb_info initial, dar am
+vrut sa fie mai usor de adaptat codul din laboratoare.
