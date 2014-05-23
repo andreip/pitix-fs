@@ -215,6 +215,57 @@ static void pitix_sb_destroy_inode(struct inode *inode)
 	kfree(mii);
 }
 
+/*
+ * write VFS inode contents to disk inode
+ */
+int pitix_write_inode(struct inode *inode, struct
+		writeback_control *wbc)
+{
+	struct super_block *sb = inode->i_sb;
+	struct pitix_inode mi;
+	struct pitix_inode_info *mii = container_of(inode,
+			struct pitix_inode_info, vfs_inode);
+	struct buffer_head *bh1 = NULL, *bh2 = NULL;
+	char *zone1 = NULL, *zone2 = NULL;
+	int err = 0, len1 = 0, len2 = 0;
+
+	printk(LOG_LEVEL "in write before find inode\n");
+	pitix_find_inode(sb, inode->i_ino, &bh1, &bh2, &zone1, &len1, &zone2,
+			 &len2);
+	if (bh1 == NULL) {
+		printk(LOG_LEVEL "could not read block\n");
+		err = -ENOMEM;
+		goto out;
+	}
+
+	/* fill disk inode */
+	mi.mode = inode->i_mode;
+	mi.uid = inode->i_uid;
+	mi.gid = inode->i_gid;
+	mi.size = inode->i_size;
+	memcpy(mi.data_blocks, mii->data_blocks,
+	       pitix_sbi(sb)->inode_data_blocks * sizeof(__u16));
+
+	printk(LOG_LEVEL "mode is %05o; data_blocks at %p\n", mi.mode, mii->data_blocks);
+
+	memcpy(zone1, &mi, len1);
+	memcpy(zone2, ((char*) &mi) + len1, len2);
+
+	if (bh1) {
+	        mark_buffer_dirty(bh1);
+	        brelse(bh1);
+	}
+	if (bh2) {
+	        mark_buffer_dirty(bh2);
+	        brelse(bh2);
+	}
+
+	printk(LOG_LEVEL "wrote inode %lu\n", inode->i_ino);
+
+out:
+	return err;
+}
+
 static void pitix_put_super(struct super_block *sb)
 {
 	struct pitix_sb_info *sbi = sb->s_fs_info;
@@ -230,7 +281,7 @@ static const struct super_operations pitix_ops = {
 	.statfs         = simple_statfs,
 	.alloc_inode    = pitix_sb_alloc_inode,
 	.destroy_inode  = pitix_sb_destroy_inode,
-	//.write_inode	= pitix_write_inode,
+	.write_inode	= pitix_write_inode,
 	.put_super	= pitix_put_super,
 };
 
