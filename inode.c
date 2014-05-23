@@ -31,15 +31,16 @@ static void pitix_find_inode(struct super_block *s, unsigned long ino,
 			     char **zone1, unsigned int *len1,
 			     char **zone2, unsigned int *len2)
 {
-	struct buffer_head *bh;
+	struct buffer_head *bh, *bh_2;
 	unsigned int block_index, offset;
 	unsigned int bytes_to_read;
 	int remaining_bytes;
 	char *start_addr1 = NULL, *start_addr2 = NULL, *last_addr;
-	//struct pitix_inode *test;
+	int i, j;
+	struct pitix_inode *test;
 
 	block_index = ino * inode_size(s) / s->s_blocksize;
-	printk(LOG_LEVEL "MA-TAA ino %lu ino_size %d block %d\n", ino, inode_size(s), block_index);
+	printk(LOG_LEVEL "MA-TAA ino %lu ino_size %d block %d struct pitix_inode size %d\n", ino, inode_size(s), block_index, sizeof(struct pitix_inode));
 	//printk(LOG_LEVEL "find_inode %lu block_index %d %d\n", ino, block_index, pitix_sbi(s)->izone_block);
 	bh = sb_bread(s, pitix_sbi(s)->izone_block + block_index);
 	*bh1 = bh;
@@ -53,6 +54,17 @@ static void pitix_find_inode(struct super_block *s, unsigned long ino,
 	start_addr1 = ((char*) bh->b_data) + offset;
 	last_addr = ((char*) bh->b_data) + s->s_blocksize;
 	//printk(LOG_LEVEL "find_inode off %u st %p lst %p\n", offset, start_addr1, last_addr);
+
+	if (ino == 23) {
+		for (j = 0; j < 5; ++j) {
+			bh_2 = sb_bread(s, pitix_sbi(s)->izone_block + j);
+			for (i = 0; i < 512-103; ++i) {
+				test = (struct pitix_inode*) (((char*)bh->b_data) + i);
+				printk(LOG_LEVEL "testing block %d i %d size %d\n", j, i, test->size);
+			}
+			brelse(bh_2);
+		}
+	}
 
 	/* Compute number of bytes we can read from current block. There
 	 * is the possiblity that the size left in the block is smaller
