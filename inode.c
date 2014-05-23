@@ -36,8 +36,10 @@ static void pitix_find_inode(struct super_block *s, unsigned long ino,
 	unsigned int bytes_to_read;
 	int remaining_bytes;
 	char *start_addr1 = NULL, *start_addr2 = NULL, *last_addr;
+	struct pitix_inode *test;
 
 	block_index = ino * inode_size(s) / s->s_blocksize;
+	printk(LOG_LEVEL "find_inode %lu block_index %d %d\n", ino, block_index, pitix_sbi(s)->izone_block);
 	bh = sb_bread(s, pitix_sbi(s)->izone_block + block_index);
 	*bh1 = bh;
 	if (bh == NULL) {
@@ -45,9 +47,14 @@ static void pitix_find_inode(struct super_block *s, unsigned long ino,
 		goto out_free;
 	}
 
+	test = (struct pitix_inode*) (((char*) bh->b_data) + inode_size(s));
+	printk(LOG_LEVEL "test %d %d\n", test->data_blocks[0], test->data_blocks[1]);
+	printk(LOG_LEVEL "test mode %05o uid %d gid %d size %d time %d\n", test->mode, test->uid, test->gid, test->size, test->time);
+
 	offset = (ino * inode_size(s)) % s->s_blocksize;
 	start_addr1 = ((char*) bh->b_data) + offset;
 	last_addr = ((char*) bh->b_data) + s->s_blocksize;
+	printk(LOG_LEVEL "find_inode off %u st %p lst %p\n", offset, start_addr1, last_addr);
 
 	/* Compute number of bytes we can read from current block. There
 	 * is the possiblity that the size left in the block is smaller
@@ -56,6 +63,8 @@ static void pitix_find_inode(struct super_block *s, unsigned long ino,
 	 */
 	bytes_to_read = MIN(abs(last_addr - start_addr1 + 1), inode_size(s));
 	remaining_bytes = MAX(0, inode_size(s) - bytes_to_read);
+
+	printk(LOG_LEVEL "reached here0, bh %p\n", bh);
 
 	/* Read the right next block in case we still haven't read
 	 * inode_size(s). */
@@ -75,9 +84,13 @@ static void pitix_find_inode(struct super_block *s, unsigned long ino,
 	*zone2 = start_addr2;
 	*len2 = remaining_bytes;
 
+	printk(LOG_LEVEL "reached here1 bh1 %p bh2 %p z1 z2 %p %p l1 l2 %u %u\n", *bh1, *bh2, *zone1, *zone2, *len1, *len2);
+
+
 	return;
 
 out_free:
+	printk(LOG_LEVEL "find_inode out_free\n");
 	if (*bh1)
 		brelse(*bh1);
 	if (*bh2)
@@ -119,6 +132,7 @@ struct inode *pitix_iget(struct super_block *s, unsigned long ino)
 	struct pitix_inode *mi;
 	struct inode *inode;
 	struct pitix_inode_info *mii;
+	int i;
 
 	/* assert that the ino number is correct. */
 	if (ino > get_inodes(s)) {
@@ -153,12 +167,17 @@ struct inode *pitix_iget(struct super_block *s, unsigned long ino)
 	inode->i_mtime = inode->i_atime = inode->i_ctime = CURRENT_TIME;
 
 	if (S_ISDIR(inode->i_mode)) {
-		inode->i_op = &simple_dir_inode_operations;
-		inode->i_fop = &simple_dir_operations;
+		inode->i_op = &pitix_dir_inode_operations;
+		inode->i_fop = &pitix_dir_operations;
 	}
 
 	/* fill data for mii */
+	printk(LOG_LEVEL "----\n");
 	mii = container_of(inode, struct pitix_inode_info, vfs_inode);
+	for (i = 0 ; i < pitix_sbi(s)->inode_data_blocks; ++i) {
+		printk(LOG_LEVEL "iget %d %d\n", i, mii->data_blocks[i]);
+	}
+	printk(LOG_LEVEL "----\n");
 	memcpy(mii->data_blocks, mi->data_blocks,
 	       pitix_sbi(s)->inode_data_blocks * sizeof(__u16));
 
@@ -227,11 +246,12 @@ int pitix_write_inode(struct inode *inode, struct
 			struct pitix_inode_info, vfs_inode);
 	struct buffer_head *bh1 = NULL, *bh2 = NULL;
 	char *zone1 = NULL, *zone2 = NULL;
-	int err = 0, len1 = 0, len2 = 0;
+	int err = 0, len1 = 0, len2 = 0, i;
 
-	printk(LOG_LEVEL "in write before find inode\n");
+	printk(LOG_LEVEL "in write before finding inode %lu\n", inode->i_ino);
 	pitix_find_inode(sb, inode->i_ino, &bh1, &bh2, &zone1, &len1, &zone2,
 			 &len2);
+	printk(LOG_LEVEL "in write after; bh1 %p bh2 %p z1 %p z2 %p len1 %d len2 %d\n", bh1, bh2, zone1, zone2, len1, len2);
 	if (bh1 == NULL) {
 		printk(LOG_LEVEL "could not read block\n");
 		err = -ENOMEM;
@@ -243,13 +263,23 @@ int pitix_write_inode(struct inode *inode, struct
 	mi.uid = inode->i_uid;
 	mi.gid = inode->i_gid;
 	mi.size = inode->i_size;
-	memcpy(mi.data_blocks, mii->data_blocks,
-	       pitix_sbi(sb)->inode_data_blocks * sizeof(__u16));
+	printk(LOG_LEVEL "nr inodes %d\n", pitix_sbi(sb)->inode_data_blocks);
+	for (i = 0; i < pitix_sbi(sb)->inode_data_blocks; ++i)
+		printk(LOG_LEVEL "nr inode (%d) %d\n", i, mii->data_blocks[i]);
 
-	printk(LOG_LEVEL "mode is %05o; data_blocks at %p\n", mi.mode, mii->data_blocks);
+	//for (i = 0; i < pitix_sbi(sb)->inode_data_blocks; ++i)
+	//	mi.data_blocks[i] = mii->data_blocks[i];
+	//memcpy(mi.data_blocks, mii->data_blocks,
+	//       pitix_sbi(sb)->inode_data_blocks * sizeof(__u16));
+
+	printk(LOG_LEVEL "mode is %05o; data_blocks at %d\n", mi.mode, mii->data_blocks[1]);
+	printk(LOG_LEVEL "z1 %p z2 %p l1 %d l2 %d\n", zone1, zone2, len1, len2);
+	printk(LOG_LEVEL "bh1  %p bh2 %p\n", bh1, bh2);
 
 	memcpy(zone1, &mi, len1);
+	printk(LOG_LEVEL "after memcpy1\n");
 	memcpy(zone2, ((char*) &mi) + len1, len2);
+	printk(LOG_LEVEL "after memcpy2\n");
 
 	if (bh1) {
 	        mark_buffer_dirty(bh1);
@@ -281,7 +311,7 @@ static const struct super_operations pitix_ops = {
 	.statfs         = simple_statfs,
 	.alloc_inode    = pitix_sb_alloc_inode,
 	.destroy_inode  = pitix_sb_destroy_inode,
-	.write_inode	= pitix_write_inode,
+	//.write_inode	= pitix_write_inode,
 	.put_super	= pitix_put_super,
 };
 

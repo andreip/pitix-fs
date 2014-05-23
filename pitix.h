@@ -116,6 +116,9 @@ extern struct file_operations pitix_dir_operations;
 /* File operations */
 extern struct file_operations pitix_file_operations;
 extern struct inode_operations pitix_file_inode_operations;
+extern struct dentry* pitix_lookup(struct inode *dir,
+				   struct dentry *dentry,
+				   unsigned int flags);
 
 /* Inode operations */
 extern struct inode *pitix_new_inode(struct super_block *sb);
