@@ -100,7 +100,7 @@ static struct pitix_inode* pitix_get_inode(struct super_block *s,
 	 */
 	pitix_find_inode(s, ino, &bh1, &bh2, &zone1, &len1, &zone2, &len2);
 
-	final_mii = kzalloc(sizeof(struct pitix_inode), GFP_KERNEL);
+	final_mii = kzalloc(inode_size(s), GFP_KERNEL);
 	if (!final_mii) {
 		printk(LOG_LEVEL "not enough memory\n");
 		goto out;
