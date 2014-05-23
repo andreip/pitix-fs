@@ -174,7 +174,6 @@ struct inode *pitix_iget(struct super_block *s, unsigned long ino)
 	return inode;
 
 out_bad_sb:
-	kfree(mi);
 	iget_failed(inode);
 out:
 	return NULL;
