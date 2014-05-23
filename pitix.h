@@ -77,8 +77,8 @@ static inline struct pitix_sb_info* pitix_sbi(struct super_block* sb)
 
 static inline int inode_size(struct super_block *sb)
 {
-	struct pitix_super_block *psb=(struct pitix_super_block*)sb->s_fs_info;
-	return sizeof(struct pitix_inode)+sizeof(__u16)*psb->inode_data_blocks;
+	struct pitix_sb_info *psi=(struct pitix_sb_info*)sb->s_fs_info;
+	return sizeof(struct pitix_inode)+sizeof(__u16)*psi->inode_data_blocks;
 }
 
 static inline int dir_entry_size(struct super_block *sb)
