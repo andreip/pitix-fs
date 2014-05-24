@@ -2,6 +2,12 @@
 
 #include "pitix.h"
 
+static int pitix_mkdir(struct inode * dir, struct dentry * dentry, umode_t mode)
+{
+	int retval = pitix_create(dir, dentry, mode | S_IFDIR, 0);
+	return retval;
+}
+
 static int pitix_readdir(struct file *filp, struct dir_context *ctx)
 {
 	struct buffer_head *bh = NULL;
@@ -55,4 +61,5 @@ struct inode_operations pitix_dir_inode_operations =
 {
 	.lookup		= pitix_lookup,
 	.create		= pitix_create,
+	.mkdir		= pitix_mkdir,
 };
