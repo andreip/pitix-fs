@@ -66,7 +66,8 @@ struct pitix_sb_info {
 	__u8 dzone_block;
 	__u16 bfree;
 	__u16 ffree;
-	struct buffer_head *sb_bh;
+	struct buffer_head *sb_bh, *dmap_bh, *imap_bh;
+	__u8 *dmap, *imap;
 };
 
 #ifdef __KERNEL__
@@ -119,6 +120,8 @@ extern struct inode_operations pitix_file_inode_operations;
 extern struct dentry* pitix_lookup(struct inode *dir,
 				   struct dentry *dentry,
 				   unsigned int flags);
+extern int pitix_create(struct inode *dir, struct dentry *dentry,
+			umode_t mode, bool excl);
 
 /* Inode operations */
 extern struct inode *pitix_new_inode(struct super_block *sb);

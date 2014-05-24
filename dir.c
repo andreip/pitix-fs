@@ -11,7 +11,7 @@ static int pitix_readdir(struct file *filp, struct dir_context *ctx)
 			struct pitix_inode_info, vfs_inode);
 	struct super_block *sb = inode->i_sb;
 	int err = 0;
-	int over, i;
+	int over;
 
 	/* read data block for directory inode */
 	bh = sb_bread(sb, pitix_sbi(sb)->dzone_block + mii->data_blocks[0]);
@@ -54,4 +54,5 @@ struct file_operations pitix_dir_operations = {
 struct inode_operations pitix_dir_inode_operations =
 {
 	.lookup		= pitix_lookup,
+	.create		= pitix_create,
 };

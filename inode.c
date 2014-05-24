@@ -16,6 +16,43 @@ MODULE_DESCRIPTION("Pitix filesystem");
 MODULE_AUTHOR("Andrei Petre");
 MODULE_LICENSE("GPL");
 
+struct inode *pitix_new_inode(struct super_block *sb)
+{
+	struct inode *inode;
+	struct buffer_head *bh = NULL;
+	int idx;
+
+	/* read imap block to find free inode */
+	bh = sb_bread(sb, pitix_sbi(sb)->imap_block);
+	if (bh == NULL) {
+		printk(LOG_LEVEL "could not read block\n");
+		return NULL;
+	}
+	brelse(bh);
+
+	pitix_sbi(sb)->imap = bh->b_data;
+	idx = find_first_zero_bit((unsigned long*) pitix_sbi(sb)->imap, sb->s_blocksize * sizeof(__u8));
+	if (idx < 0) {
+		printk(LOG_LEVEL "no space left in imap\n");
+		return NULL;
+	}
+	printk(LOG_LEVEL "create new inode, found first free at %d\n", idx);
+
+	__test_and_set_bit(idx, (unsigned long*) pitix_sbi(sb)->imap);
+	mark_buffer_dirty(bh);
+
+	inode = new_inode(sb);
+	inode->i_uid = current_fsuid();
+	inode->i_gid = current_fsgid();
+	inode->i_ino = idx;
+	inode->i_mtime = inode->i_atime = inode->i_ctime = CURRENT_TIME;
+	inode->i_blocks = 0;
+
+	insert_inode_hash(inode);
+
+	return inode;
+}
+
 /* This function searches for an inode (ino)
  * inside an izone area and also covers the
  * case when an inode is on two different blocks
