@@ -53,5 +53,5 @@ struct file_operations pitix_dir_operations = {
 
 struct inode_operations pitix_dir_inode_operations =
 {
-	.lookup         = pitix_lookup,
+	.lookup		= pitix_lookup,
 };

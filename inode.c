@@ -31,7 +31,7 @@ static void pitix_find_inode(struct super_block *s, unsigned long ino,
 			     char **zone1, unsigned int *len1,
 			     char **zone2, unsigned int *len2)
 {
-	struct buffer_head *bh, *bh_2;
+	struct buffer_head *bh;
 	unsigned int block_index, offset;
 	unsigned int bytes_to_read;
 	int remaining_bytes;
@@ -117,7 +117,6 @@ struct inode *pitix_iget(struct super_block *s, unsigned long ino)
 	struct pitix_inode *mi;
 	struct inode *inode;
 	struct pitix_inode_info *mii;
-	int i;
 
 	/* assert that the ino number is correct. */
 	if (ino > get_inodes(s)) {
@@ -150,10 +149,14 @@ struct inode *pitix_iget(struct super_block *s, unsigned long ino)
 	inode->i_size = mi->size;
 	inode->i_blocks = 0;
 	inode->i_mtime = inode->i_atime = inode->i_ctime = CURRENT_TIME;
+	inode->i_mapping->a_ops = &pitix_aops;
 
 	if (S_ISDIR(inode->i_mode)) {
 		inode->i_op = &pitix_dir_inode_operations;
 		inode->i_fop = &pitix_dir_operations;
+	} else if (S_ISREG(inode->i_mode)) {
+		inode->i_op = &pitix_file_inode_operations;
+		inode->i_fop = &pitix_file_operations;
 	}
 
 	/* fill data for mii */
@@ -223,7 +226,7 @@ int pitix_write_inode(struct inode *inode, struct
 			struct pitix_inode_info, vfs_inode);
 	struct buffer_head *bh1 = NULL, *bh2 = NULL;
 	char *zone1 = NULL, *zone2 = NULL;
-	int err = 0, len1 = 0, len2 = 0, i;
+	int err = 0, len1 = 0, len2 = 0;
 
 	pitix_find_inode(sb, inode->i_ino, &bh1, &bh2, &zone1, &len1, &zone2,
 			 &len2);
@@ -238,6 +241,11 @@ int pitix_write_inode(struct inode *inode, struct
 	mi.uid = inode->i_uid;
 	mi.gid = inode->i_gid;
 	mi.size = inode->i_size;
+
+	/* TODO write data blocks too, currently failing. */
+	//printk(LOG_LEVEL "write size %d\n", sizeof(__u16) * pitix_sbi(sb)->inode_data_blocks);
+	//memcpy(mi.data_blocks, mii->data_blocks,
+	//       sizeof(__u16) * pitix_sbi(sb)->inode_data_blocks);
 
 	memcpy(zone1, &mi, len1);
 	memcpy(zone2, ((char*) &mi) + len1, len2);
@@ -272,7 +280,7 @@ static const struct super_operations pitix_ops = {
 	.statfs         = simple_statfs,
 	.alloc_inode    = pitix_sb_alloc_inode,
 	.destroy_inode  = pitix_sb_destroy_inode,
-	//.write_inode	= pitix_write_inode,
+	.write_inode	= pitix_write_inode,
 	.put_super	= pitix_put_super,
 };
 
